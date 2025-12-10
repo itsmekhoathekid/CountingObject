@@ -62,7 +62,8 @@ class Engine:
 
     def train(self, trainloader):
         self.model.train()
-        for batch in tqdm(trainloader, desc = "Training"):
+        progress_bar = tqdm(trainloader, desc="Training", leave=False)
+        for batch in progress_bar:
             imgs = batch['image'].to(self.device)
             gt_density = batch['density'].to(self.device)
             boxes = batch['boxes']
@@ -116,6 +117,11 @@ class Engine:
                 loss.item(), mse_loss.item(), rank_loss.item(), batch_mae, batch_rmse, gt_sum
             ))
 
+            progress_bar.set_postfix(
+                batch_loss = loss.item())
+
+            
+
 
 
 
@@ -123,7 +129,8 @@ class Engine:
 
     def evaluate(self, dataloader):
         self.model.eval()
-        for batch in tqdm(dataloader, desc = "Evaluating"):
+        progress_bar = tqdm(dataloader, desc = "Evaluating", leave=False)
+        for batch in progress_bar:
             imgs = batch['image'].to(self.device)
             gt_density = batch['density'].to(self.device)
             boxes = batch['boxes']
@@ -172,6 +179,9 @@ class Engine:
             logging.info("Loss: {:.4f}, MSE Loss: {:.4f}, Rank Loss: {:.4f}, MAE: {:.4f}, RMSE: {:.4f}, GT Sum: {:.4f}".format(
                 loss.item(), mse_loss.item(), rank_loss.item(), batch_mae, batch_rmse, gt_sum
             ))
+
+            progress_bar.set_postfix(
+                batch_loss = loss.item())
 
             return batch_mae, batch_rmse
     
