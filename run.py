@@ -21,7 +21,8 @@ class Engine:
         self.rank_loss = RankLoss(temperature=0.07)
         self.current_epoch = 0
         self.contrast_pre_epoch = config['training'].get('contrast_pre_epoch', 20)
-    
+        self.min_mae = float('inf')
+
     def reload(self):
         checkpoint_path = self.config['training'].get('save_path', 'checkpoint.pth')
         if checkpoint_path is not None:
@@ -34,14 +35,16 @@ class Engine:
             logging.info("No checkpoint path provided, training from scratch.")
         
         self.current_epoch = checkpoint.get('epoch', 0) if checkpoint_path is not None else 0
+        self.min_mae = checkpoint.get('min_mae', float('inf')) if checkpoint_path is not None else float('inf')
     
-    def save(self, epoch):
+    def save(self, epoch, score):
         checkpoint_path = self.config['training'].get('save_path', 'checkpoint.pth')
         torch.save({
             'epoch': epoch,
             'model_state_dict': self.model.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
             'schedular_state_dict': self.schedular.state_dict(),
+            'min_mae': score
         }, checkpoint_path)
 
         logging.info("Saved model checkpoint to {}".format(checkpoint_path))
@@ -249,7 +252,7 @@ class Engine:
         if reload_bool:
             self.reload()
 
-        min_mae = float('inf')
+        
         
         current_epoch = self.current_epoch
         for epoch in range(current_epoch, num_epochs):
@@ -258,10 +261,10 @@ class Engine:
             self.train(train_loader)
             epoch_mae, epoch_rmse = self.evaluate(eval_loader)
 
-            if epoch_mae < min_mae:
-                min_mae = epoch_mae
-                self.save(epoch+1)
-                logging.info("New best model saved with MAE: {:.4f}".format(min_mae))
+            if epoch_mae < self.min_mae:
+                self.min_mae = epoch_mae
+                self.save(epoch+1, self.min_mae)
+                logging.info("New best model saved with MAE: {:.4f}".format(self.min_mae))
             
             self.schedular.step()
     
