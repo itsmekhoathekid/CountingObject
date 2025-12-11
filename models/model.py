@@ -208,6 +208,7 @@ class LGCount(nn.Module):
         pred_density = self.forward_decoder(cls_token, img_feat_patches, class_text_embedding) # top_fine_text_embedding
         # pred_density = self.forward_decoder(img_feat_patches, torch.cat((class_text_embedding, top_fine_text_embedding),dim=1))
 
+        # print(class_text_embedding.shape)
         extra_out['class_text_embedding'] = class_text_embedding
         extra_out['patch_embedding_contrast'] = patch_embedding_contrast
 

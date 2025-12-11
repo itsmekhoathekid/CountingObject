@@ -118,7 +118,11 @@ class Engine:
             ))
 
             progress_bar.set_postfix(
-                batch_loss = loss.item())
+                {
+                'batch_loss': loss.item(),
+                'batch_mae': batch_mae,
+                'batch_rmse': batch_rmse
+                })
 
             
 
@@ -181,7 +185,11 @@ class Engine:
             ))
 
             progress_bar.set_postfix(
-                batch_loss = loss.item())
+                {
+                'batch_loss': loss.item(),
+                'batch_mae': batch_mae,
+                'batch_rmse': batch_rmse
+                })
 
             return batch_mae, batch_rmse
     
