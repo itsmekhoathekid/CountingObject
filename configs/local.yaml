@@ -1,5 +1,5 @@
 training:
-  data_dir: /home/anhkhoa/anhkhoa/CountingObject/Dataset
+  data_dir: /home/tansang/Documents/CountingObject/Dataset
   dataset_type: ""
   resize_val: true
   additional_prompt: false
