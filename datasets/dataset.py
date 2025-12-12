@@ -169,6 +169,16 @@ class FSC147(Dataset):
         return self.transform(img), torch.from_numpy(den_map.copy()).float().unsqueeze(0), torch.from_numpy(img_attention_map.copy()).float().unsqueeze(0)
 
 
+def collate_fn(batch):
+    image, density, boxes, m_flag, text = zip(*batch)
+
+    return {
+        'image': torch.stack(image, 0),
+        'density': torch.stack(density, 0),
+        'boxes': boxes,
+        'm_flag': torch.tensor(m_flag),
+        'text': text
+    }
 
 import logging
 import os 
