@@ -8,7 +8,7 @@ else
     echo "Dataset directory already exists. Skipping creation."
 fi
 
-pip install gdown opencv-python scipy imgaug "numpy<2" git+https://github.com/openai/CLIP.git einops --quiet
+pip install gdown opencv-python scipy h5py transformers imgaug "numpy<2" git+https://github.com/openai/CLIP.git einops --quiet
 
 # Tải file bằng gdown
 echo "Downloading file..."

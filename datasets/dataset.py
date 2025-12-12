@@ -21,9 +21,9 @@ def random_crop(im_h, im_w, crop_h, crop_w):
     return i, j, crop_h, crop_w
 
 
-class ObjectCount(Dataset):
+class FSC147(Dataset):
     def __init__(self, root, crop_size, downsample_ratio, method='train', concat_size=224):
-        super(ObjectCount, self).__init__()
+        super(FSC147, self).__init__()
         #self.im_list = sorted(glob(os.path.join(root, 'images/*.jpg')))
         assert crop_size % downsample_ratio == 0
         assert method in ['train', 'val', 'test'], f"Invalid method: {method}. Must be 'train', 'val', or 'test'."
@@ -168,3 +168,19 @@ class ObjectCount(Dataset):
 
         return self.transform(img), torch.from_numpy(den_map.copy()).float().unsqueeze(0), torch.from_numpy(img_attention_map.copy()).float().unsqueeze(0)
 
+
+
+import logging
+import os 
+
+def logg(log_file):
+    if not os.path.exists(os.path.dirname(log_file)):
+        os.makedirs(os.path.dirname(log_file))
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(message)s",
+        handlers=[
+            logging.FileHandler(log_file),
+            logging.StreamHandler()  # vẫn in ra màn hình
+        ]
+    )
