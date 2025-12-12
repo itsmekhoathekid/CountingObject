@@ -63,7 +63,7 @@ class Engine:
             weight_decay=self.config['optim'].get('weight_decay', 0.05)
         )
 
-        schedular = torch.optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.33)
+        schedular = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.33)
 
         return model, optimizer, schedular
     
@@ -143,10 +143,10 @@ class Engine:
 
             progress_bar.set_postfix(
                 {
-                'batch_loss': loss.item(),
-                'batch_mae': batch_mae,
-                'batch_rmse': batch_rmse,
-                'lr' : self.optimizer.param_groups[0]['lr']
+                    'batch_loss': loss.item(),
+                    'batch_mae': batch_mae,
+                    'batch_rmse': batch_rmse,
+                    'lr' : self.optimizer.param_groups[0]['lr']
                 })
         
         epoch_mae  = total_abs_err / total_samples
@@ -157,7 +157,7 @@ class Engine:
                 epoch_mae, epoch_rmse
             )
         )
-
+    
 
             
 
