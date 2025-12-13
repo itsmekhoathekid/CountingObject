@@ -4,8 +4,10 @@ from tqdm import tqdm
 from models import *
 import numpy as np
 import torch.nn.functional as F
+import torchvision.transforms.functional as F2
 import warnings
 import logging
+
 
 warnings.filterwarnings("ignore")
 
@@ -22,6 +24,7 @@ class Engine:
         self.current_epoch = 0
         self.contrast_pre_epoch = config['training'].get('contrast_pre_epoch', 20)
         self.min_mae = float('inf')
+        self.get_exampler = GetExampler(device=self.device)
 
     def reload(self):
         checkpoint_path = self.config['training'].get('save_path', 'checkpoint.pth')
@@ -80,16 +83,36 @@ class Engine:
         for batch in progress_bar:
             imgs = batch['image'].to(self.device)
             gt_density = batch['density'].to(self.device)
-            prompt_attn_mask = batch['prompt_attn_mask'].to(self.device)
-            img_attn_map = batch['img_attn_map'].to(self.device)
+            img_path = batch['img_path']
             text = batch['text']
+            print(img_path)
+            examplers = self.get_exampler.get_highest_score_crop(img_path, text, box_threshold=BOX_THRESHOLD, keep_area=KEEP_AREA, device=self.device)
+            import torchvision.transforms.functional as VF
+
+            fixed = []
+            for ex in examplers:
+                if ex is None:
+                    fixed.append(torch.zeros(3, 384, 384, dtype=torch.float32))
+                    continue
+
+                # ex: numpy HWC uint8 -> Tensor CHW float [0,1]
+                ex_t = torch.from_numpy(ex).permute(2, 0, 1).contiguous().float() / 255.0  # (3,h,w)
+
+                # resize tensor
+                ex_t = VF.resize(ex_t, (384, 384))
+                fixed.append(ex_t)
+
+            examplers = torch.stack(fixed, dim=0).to(self.device)
+            
+            # examplers = torch.stack(examplers, dim = 0).to(self.device)
 
             self.optimizer.zero_grad()
 
             output, extra_out = self.model(
                 imgs,
                 text,
-                coop_require_grad=self.config['training'].get('coop_training', False)
+                coop_require_grad=self.config['training'].get('coop_training', False),
+                examplers=examplers
             )
 
             mask = np.random.binomial(n=1, p=0.8, size=[384, 384])
@@ -180,15 +203,17 @@ class Engine:
         for batch in progress_bar:
             imgs = batch['image'].to(self.device)
             batch_count = batch['batch_cnt'].to(self.device)
-            img_name = batch['img_name']
-            prompt_atten_mask = batch['prompt_attn_mask'].to(self.device)
             text = batch['text']
+            examplers = self.get_exampler.get_highest_score_crop(imgs, text, box_threshold=BOX_THRESHOLD, keep_area=KEEP_AREA, device=self.device)
+            examplers = torch.stack(examplers, dim = 0).to(self.device)
 
+            self.optimizer.zero_grad()
             with torch.no_grad():
                 output, extra_out = self.model(
                     imgs,
                     text,
-                    coop_require_grad=False
+                    coop_require_grad=self.config['training'].get('coop_training', False),
+                    examplers=examplers
                 )
 
             batch_mae = 0

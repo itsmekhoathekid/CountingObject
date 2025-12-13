@@ -9,8 +9,24 @@ else
 fi
 
 #  python -m pip install --no-build-isolation -e . 
-# python -m pip install --index-url https://download.pytorch.org/whl/cu121   torch==2.3.1 torchvision==0.18.1 torchaudio==2.3.1
+echo "Installing required packages..."
+
+python -m pip install --index-url https://download.pytorch.org/whl/cu121   torch==2.3.1 torchvision==0.18.1 torchaudio==2.3.1 --quiet
 pip install gdown opencv-python scipy imgaug "numpy<2" git+https://github.com/openai/CLIP.git einops "supervision>=0.22.0" transformers addict yapf pycocotools timm roboflow --quiet
+
+ROOT_DIR="$(pwd)"
+
+cd ./CountingObject/datasets 
+if [ ! -d "${ROOT_DIR}/GroundingDINO" ]; then
+    echo "Creating Dataset directory in datasets..."
+    cd ./CountingObject/datasets 
+    git clone https://github.com/IDEA-Research/GroundingDINO.git
+    cd GroundingDINO
+    python -m pip install --no-build-isolation -e . 
+    cd "${ROOT_DIR}"
+else
+    echo "GROUNDINGDINO directory already exists. Skipping creation."
+fi
 
 # Tải file bằng gdown
 echo "Downloading file..."
