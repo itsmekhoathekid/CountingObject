@@ -9,7 +9,7 @@ import logging
 
 warnings.filterwarnings("ignore")
 
-SCALE_FACTOR = 60.0
+SCALE_FACTOR = 1.0
 
 class Engine:
     def __init__(self, config):
@@ -80,8 +80,8 @@ class Engine:
         for batch in progress_bar:
             imgs = batch['image'].to(self.device)
             gt_density = batch['density'].to(self.device)
-            boxes = batch['boxes']
-            m_flag = batch['m_flag']
+            prompt_attn_mask = batch['prompt_attn_mask'].to(self.device)
+            img_attn_map = batch['img_attn_map'].to(self.device)
             text = batch['text']
 
             self.optimizer.zero_grad()
@@ -96,6 +96,9 @@ class Engine:
             masks = np.tile(mask, (output.shape[0], 1))
             masks = masks.reshape(output.shape[0], 384, 384)
             masks = torch.from_numpy(masks).to(self.device)
+
+            # print(output.shape, gt_density.shape, masks.shape)
+            # raise
             mse_loss = self.loss(output, gt_density)
 
             mse_loss = (mse_loss * masks / (384 * 384)).sum() / output.shape[0]
@@ -177,8 +180,8 @@ class Engine:
         for batch in progress_bar:
             imgs = batch['image'].to(self.device)
             gt_density = batch['density'].to(self.device)
-            boxes = batch['boxes']
-            m_flag = batch['m_flag']
+            img_name = batch['img_name']
+            prompt_atten_mask = batch['prompt_attn_mask'].to(self.device)
             text = batch['text']
 
             with torch.no_grad():
@@ -275,19 +278,19 @@ if __name__ == "__main__":
     args = get_parser()
     config = load_config(args.config)
     logg(config['training']['log_file'])
-    dataset = FSC147(
+    train_dataset = ObjectCount(
         config = config,
         split = "train"
     )
     trainloader = torch.utils.data.DataLoader(
-        dataset,
+        train_dataset,
         batch_size=config['training']['batch_size'],
         shuffle=True,
-        collate_fn=collate_fn,
+        collate_fn=collate_fn_train_object_count,
         num_workers=config['training'].get('num_workers', 4)
     )
 
-    val_dataset = FSC147(
+    val_dataset = ObjectCount(
         config = config,
         split = "val"
     )
@@ -295,11 +298,11 @@ if __name__ == "__main__":
         val_dataset,
         batch_size=config['training']['batch_size'],
         shuffle=False,
-        collate_fn=collate_fn,
+        collate_fn=collate_fn_test_object_count,
         num_workers=config['training'].get('num_workers', 4)
     )
     
-    test_dataset = FSC147(
+    test_dataset = ObjectCount(
         config = config,
         split = "test"
     )
@@ -307,7 +310,7 @@ if __name__ == "__main__":
         test_dataset,
         batch_size=config['training']['batch_size'],
         shuffle=False,
-        collate_fn=collate_fn,
+        collate_fn=collate_fn_test_object_count,
         num_workers=config['training'].get('num_workers', 4)
     )
 

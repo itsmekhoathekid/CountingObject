@@ -1,7 +1,7 @@
 import sys
 import os
 HOME= os.getcwd()
-path = os.path.abspath(os.path.join(HOME, 'CountingObject/models/GroundingDINO'))
+path = os.path.abspath(os.path.join(HOME, 'CountingObject/datasets/GroundingDINO'))
 sys.path.append(path)
 
 
@@ -13,8 +13,8 @@ from GroundingDINO.groundingdino.util.inference import (
 )
 import supervision as sv
 
-DIR_WEIGHTS = os.path.join(HOME, "CountingObject/models/pretrained_models")
-CONFIG_PATH = os.path.join(HOME, "CountingObject/models/GroundingDINO/groundingdino/config/GroundingDINO_SwinT_OGC.py")
+DIR_WEIGHTS = os.path.join(HOME, "CountingObject/datasets/pretrained_models")
+CONFIG_PATH = os.path.join(HOME, "CountingObject/datasets/GroundingDINO/groundingdino/config/GroundingDINO_SwinT_OGC.py")
 WEIGHTS_PATH = os.path.join(DIR_WEIGHTS, "groundingdino_swint_ogc.pth")
 
 class GetExampler:

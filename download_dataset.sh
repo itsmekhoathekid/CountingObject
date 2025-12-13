@@ -8,7 +8,8 @@ else
     echo "Dataset directory already exists. Skipping creation."
 fi
 
-python -m pip install --index-url https://download.pytorch.org/whl/cu121   torch==2.3.1 torchvision==0.18.1 torchaudio==2.3.1
+#  python -m pip install --no-build-isolation -e . 
+# python -m pip install --index-url https://download.pytorch.org/whl/cu121   torch==2.3.1 torchvision==0.18.1 torchaudio==2.3.1
 pip install gdown opencv-python scipy imgaug "numpy<2" git+https://github.com/openai/CLIP.git einops "supervision>=0.22.0" transformers addict yapf pycocotools timm roboflow --quiet
 
 # Tải file bằng gdown
