@@ -8,6 +8,7 @@ import torchvision.transforms.functional as F2
 import warnings
 import logging
 import torchvision.transforms.functional as VF
+from torch.utils.data import DataLoader, default_collate
 
 
 warnings.filterwarnings("ignore")
@@ -78,6 +79,75 @@ def window_composite(patches, window_size = (384, 384), stride = 128):
             image = torch.cat([image, patch_remain], dim = -1)
     return image
 
+
+def extract_patches(img, patch_size=512, stride=512):
+    _, _, h, w = img.size()
+    num_h = (h - patch_size + stride - 1) // stride + 1
+    num_w = (w - patch_size + stride - 1) // stride + 1
+    patches = []
+    for i in range(num_h):
+        for j in range(num_w):
+            y_start = min(i * stride, h - patch_size)
+            x_start = min(j * stride, w - patch_size)
+            patch = img[:, :, y_start:y_start + patch_size, x_start:x_start + patch_size]
+            patches.append(patch)
+    patches = torch.cat(patches, dim=0)
+    return patches, num_h, num_w
+
+def reassemble_patches(patches, num_h, num_w, h, w, patch_size=512, stride=256):
+    """
+    patches: [N, C, ph, pw] hoặc [N, ph, pw]
+    - Nếu ph,pw != patch_size: upscale để về patch_size (giữ count bằng cách chia area factor)
+    - Nếu đã == patch_size: KHÔNG upscale
+    """
+    if patches.dim() == 3:          # [N,H,W] -> [N,1,H,W]
+        patches = patches.unsqueeze(1)
+    if patches.dim() != 4:
+        raise ValueError(f"Expected 4D [N,C,H,W], got {patches.shape}")
+
+    N, C, ph, pw = patches.shape
+
+    # Nếu patch output chưa phải patch_size thì upscale về patch_size
+    if (ph != patch_size) or (pw != patch_size):
+        scale_y = patch_size / ph
+        scale_x = patch_size / pw
+        # FSC thường scale đều; nếu không đều thì vẫn xử lý được
+        patches = F.interpolate(patches, size=(patch_size, patch_size), mode='bilinear', align_corners=False)
+
+        # bảo toàn tổng count: diện tích tăng lên bao nhiêu thì chia lại bấy nhiêu
+        area_factor = (patch_size * patch_size) / (ph * pw)
+        patches = patches / area_factor
+
+    result = torch.zeros(1, C, h, w, device=patches.device)
+    norm_map = torch.zeros(1, 1, h, w, device=patches.device)
+
+    patch_idx = 0
+    for i in range(num_h):
+        for j in range(num_w):
+            y_start = min(i * stride, h - patch_size)
+            x_start = min(j * stride, w - patch_size)
+
+            # patches[patch_idx] là [C,patch,patch] -> add batch dim để broadcast sạch
+            result[:, :, y_start:y_start + patch_size, x_start:x_start + patch_size] += patches[patch_idx:patch_idx+1]
+            norm_map[:, :, y_start:y_start + patch_size, x_start:x_start + patch_size] += 1
+            patch_idx += 1
+
+    result = result / norm_map.clamp_min(1.0)
+    return result
+
+
+def get_exampler_tensor_stack(examplers, device):
+    fixed = []
+    for ex in examplers:    
+        # ex: numpy HWC uint8 -> Tensor CHW float [0,1]
+        ex_t = torch.from_numpy(ex).permute(2, 0, 1).contiguous().float() / 255.0  # (3,h,w)
+
+        ex_t = VF.resize(ex_t, (384, 384))
+        fixed.append(ex_t)
+
+    examplers = torch.stack(fixed, dim=0).to(device)
+    return examplers
+
 class Engine:
     def __init__(self, config):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -104,6 +174,7 @@ class Engine:
         
         self.current_epoch = checkpoint.get('epoch', 0) if checkpoint_path is not None else 0
         self.min_mae = checkpoint.get('min_mae', float('inf')) if checkpoint_path is not None else float('inf')
+        self.batch_size = self.config['training'].get('batch_size', 4)
     
     def save(self, epoch, score):
         checkpoint_path = self.config['training'].get('save_path', 'checkpoint.pth')
@@ -153,21 +224,9 @@ class Engine:
             text = batch['text']
 
             examplers = self.get_exampler.get_highest_score_crop(img_gd, img_src, text, box_threshold=BOX_THRESHOLD, keep_area=KEEP_AREA, device=self.device)
+            # print("Type of exampler:", type(examplers[0]))
 
-            fixed = []
-            for ex in examplers:
-                if ex is None:
-                    fixed.append(torch.zeros(3, 384, 384, dtype=torch.float32))
-                    continue
-
-                # ex: numpy HWC uint8 -> Tensor CHW float [0,1]
-                ex_t = torch.from_numpy(ex).permute(2, 0, 1).contiguous().float() / 255.0  # (3,h,w)
-
-                # resize tensor
-                ex_t = VF.resize(ex_t, (384, 384))
-                fixed.append(ex_t)
-
-            examplers = torch.stack(fixed, dim=0).to(self.device)
+            examplers = get_exampler_tensor_stack(examplers, self.device)
             
             # examplers = torch.stack(examplers, dim = 0).to(self.device)
 
@@ -200,7 +259,7 @@ class Engine:
             loss = mse_loss + 0.01 * rank_loss
             # if self.current_epoch <= self.contrast_pre_epoch:
             #     loss = rank_loss 
-
+                
 
             
             # Update information of MAE and RMSE
@@ -258,101 +317,68 @@ class Engine:
 
 
     def evaluate(self, dataloader):
+        batch_size = self.config['training'].get('batch_size', 4)
         self.model.eval()
         progress_bar = tqdm(dataloader, desc = "Evaluating", leave=False)
 
         total_abs_err = 0.0      # tổng |pred - gt|
         total_sq_err  = 0.0      # tổng (pred - gt)^2
         total_samples = 0        # tổng số ảnh
-
+        epoch_res = []
         for batch in progress_bar:
-            imgs = batch['image'].to(self.device)
-            batch_count = batch['batch_cnt'].to(self.device) 
-            text = batch['text']
+            img = batch['image'].to(self.device)
+            batch_count = batch['batch_cnt'].to(self.device)
             img_gd = batch['img_gd']
             img_src = batch['img_src']
+            prompt = batch['text']
 
+            imgs = img.to(self.device)
+            text = prompt   
 
-            raw_h, raw_w = imgs.shape[2:]
-            patches, _ = sliding_window(imgs, stride=128)
-            # covert to batch
-            patches = torch.from_numpy(patches).float().to(self.device)
-
-            examplers = self.get_exampler.get_highest_score_crop(img_gd, img_src, text, box_threshold=BOX_THRESHOLD, keep_area=KEEP_AREA, device=self.device)
-
-            fixed = []
-            for ex in examplers:
-                if ex is None:
-                    fixed.append(torch.zeros(3, 384, 384, dtype=torch.float32))
-                    continue
-
-                # ex: numpy HWC uint8 -> Tensor CHW float [0,1]
-                ex_t = torch.from_numpy(ex).permute(2, 0, 1).contiguous().float() / 255.0  # (3,h,w)
-
-                # resize tensor
-                ex_t = VF.resize(ex_t, (384, 384))
-                fixed.append(ex_t)
-
-            examplers = torch.stack(fixed, dim=0).to(self.device)
-
-            N = patches.shape[0]
-            text = [text[0]] * N
-            examplers = examplers.repeat(N, 1, 1, 1)
-
-            self.optimizer.zero_grad()
-            with torch.no_grad():
-                output, extra_out = self.model(
-                    patches,
-                    text,
-                    coop_require_grad=self.config['training'].get('coop_training', False),
-                    examplers=examplers
-                )
-
-            output = output.unsqueeze(1)
-            # crop to original width
-            output = window_composite(output, stride=128)
-            output = output.squeeze(1)
-            output = output[:, :, :raw_w]
-
-            batch_mae = 0
-
-            batch_rmse = 0
-            gt_sum = 0
-            for i in range(output.shape[0]):
-                pred_cnt = torch.sum(output[i] / SCALE_FACTOR).item()
-                gt_cnt = batch_count[i].item()
-                cnt_err = abs(pred_cnt - gt_cnt)
-                gt_sum += gt_cnt
-                batch_mae += cnt_err
-                batch_rmse += cnt_err ** 2
+            cropped_imgs, num_h, num_w = extract_patches(imgs, patch_size=384,
+                                                         stride=384)
+            outputs = []
+            Np = cropped_imgs.size(0)
+            with torch.set_grad_enabled(False):
+                examplers = self.get_exampler.get_highest_score_crop(img_gd, img_src, text, box_threshold=BOX_THRESHOLD, keep_area=KEEP_AREA, device=self.device)
                 
-                total_abs_err += cnt_err
-                total_sq_err  += cnt_err ** 2   
-                total_samples += 1
+                # print("Type of exampler:", type(examplers[0]))
 
-            batch_mae /= output.shape[0]
-            batch_rmse /= output.shape[0]
-            batch_rmse = math.sqrt(batch_rmse)
+                examplers = get_exampler_tensor_stack(examplers, self.device)
 
-            # logging.info("Loss: {:.4f}, MSE Loss: {:.4f}, Rank Loss: {:.4f}, MAE: {:.4f}, RMSE: {:.4f}, GT Sum: {:.4f}".format(
-            #     loss.item(), mse_loss.item(), rank_loss.item(), batch_mae, batch_rmse, gt_sum
-            # ))
+                if examplers.size(0) == 1 and Np > 1:
+                    examplers = examplers.repeat(Np, 1, 1, 1)
+                elif examplers.size(0) != Np:
+                    # fallback an toàn: nếu lệch vì lý do nào đó, ép đúng Np
+                    examplers = examplers[:1].repeat(Np, 1, 1, 1)
 
-            progress_bar.set_postfix(
-                {
-                'batch_mae': batch_mae,
-                'batch_rmse': batch_rmse
-                })
-
+                num_chunks = (cropped_imgs.size(0) + batch_size - 1) // batch_size
+                for i in range(num_chunks):
+                    start_idx = i * batch_size
+                    end_idx = min((i + 1) * batch_size, cropped_imgs.size(0))
+                    # print(type(cropped_imgs[start_idx:end_idx]))
+                    # raise
+                    outputs_partial, _ = self.model(cropped_imgs[start_idx:end_idx], text * (end_idx - start_idx), coop_require_grad=self.config['training'].get('coop_training', False), examplers=examplers[start_idx:end_idx])
+                    # đảm bảo out là [b, 1, h, w]
+                    if outputs_partial.dim() == 3:      # [b,h,w]
+                        outputs_partial = outputs_partial.unsqueeze(1)
+                    outputs.append(outputs_partial)
+                    
+                results = reassemble_patches(torch.cat(outputs, dim=0), num_h, num_w, imgs.size(2), imgs.size(3),
+                                             patch_size=384, stride=384)
+                res = batch_count[0].item() - torch.sum(results).item() / 60
+                epoch_res.append(res)
         
-        epoch_mae  = total_abs_err / total_samples
-        epoch_rmse = math.sqrt(total_sq_err / total_samples)    
+        epoch_res = np.array(epoch_res)
+        mse = np.sqrt(np.mean(np.square(epoch_res)))
+        mae = np.mean(np.abs(epoch_res))
+            
         logging.info(
             "Eval epoch done | epoch MAE: {:.4f}, epoch RMSE: {:.4f}".format(
-                epoch_mae, epoch_rmse
+                mae, mse
             )
         )
-        return epoch_mae, epoch_rmse
+        return mae, mse
     
     def train_eval(self, train_loader, eval_loader):
         num_epochs = self.config['training']['num_epochs']
