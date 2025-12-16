@@ -118,7 +118,7 @@ class Engine:
         logging.info("Saved model checkpoint to {}".format(checkpoint_path))
         
     def creates(self):
-        model = LGCount(
+        model = CLIPCount(
             fim_depth=self.config['model'].get('fim_depth', 4),
             fim_num_heads=self.config['model'].get('fim_num_heads', 8),
             mlp_ratio=self.config['model'].get('mlp_ratio', 4.0)
