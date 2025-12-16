@@ -1,11 +1,11 @@
 training:
-  data_dir: /home/anhkhoa/anhkhoa/CountingObject/Dataset
+  data_dir: /workspace/CountingObject/Dataset
   dataset_type: ""
   resize_val: true
   additional_prompt: false
   subset_scale: 1.0
-  batch_size: 1
-  num_epochs: 10
+  batch_size: 32
+  num_epochs: 120
   log_file: ./logs/local.log
   contrast_pre_epoch: 20
 
@@ -17,4 +17,4 @@ model:
 
 optim:
   lr: 0.0001
-  weight_decay: 0.001
+  weight_decay: 0.001s
