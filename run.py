@@ -218,7 +218,7 @@ class Engine:
 
         for batch in progress_bar:
             imgs = batch['image'].to(self.device)
-            gt_density = batch['density'].to(self.device) * SCALE_FACTOR
+            gt_density = batch['density'].to(self.device) 
             img_gd = batch['img_gd']
             img_src = batch['img_src']
             text = batch['text']
@@ -319,7 +319,7 @@ class Engine:
 
         for batch in progress_bar:
             imgs = batch['image'].to(self.device)
-            batch_cnt = batch['batch_cnt']
+            img_density = batch['density'].to(self.device) 
             img_gd = batch['img_gd']
             img_src = batch['img_src']
             text = batch['text']
@@ -348,7 +348,7 @@ class Engine:
             gt_sum = 0
             for i in range(output.shape[0]):
                 pred_cnt = torch.sum(output[i] / SCALE_FACTOR).item()
-                gt_cnt = batch_cnt[i]
+                gt_cnt = torch.sum(img_density[i] / SCALE_FACTOR).item()
                 cnt_err = abs(pred_cnt - gt_cnt)
                 gt_sum += gt_cnt
                 batch_mae += cnt_err
@@ -479,44 +479,47 @@ if __name__ == "__main__":
     args = get_parser()
     config = load_config(args.config)
     logg(config['training']['log_file'])
-    train_dataset = ObjectCount(
+    train_dataset = FSC147(
         config = config,
-        split = "train"
+        split = "train",
+        subset_scale = config['training'].get('val_subset_scale', 1.0)
     )
     trainloader = torch.utils.data.DataLoader(
         train_dataset,
         batch_size=config['training']['batch_size'],
         shuffle=True,
-        collate_fn=collate_fn_train_object_count,
+        collate_fn=collate_fn,
         num_workers=config['training'].get('num_workers', 4)
     )
 
-    val_dataset = ObjectCount(
+    val_dataset = FSC147(
         config = config,
-        split = "val"
+        split = "val",
+        subset_scale=config['training'].get('val_subset_scale', 1.0)
     )
     val_loader = torch.utils.data.DataLoader(
         val_dataset,
         batch_size=1,
         shuffle=False,
-        collate_fn=collate_fn_test_object_count,
+        collate_fn=collate_fn,
         num_workers=config['training'].get('num_workers', 4)
     )
     
-    test_dataset = ObjectCount(
+    test_dataset = FSC147(
         config = config,
-        split = "test"
+        split = "test",
+        subset_scale=1.0
     )
     test_loader = torch.utils.data.DataLoader(
         test_dataset,
         batch_size=1,
         shuffle=False,
-        collate_fn=collate_fn_test_object_count,
+        collate_fn=collate_fn,
         num_workers=config['training'].get('num_workers', 4)
     )
 
     engine = Engine(config)
     engine.train_eval(trainloader, val_loader)
     logging.info("Evaluating on test set...")
-    engine.evaluate(test_loader)
+    engine.eval_batch(test_loader)
 

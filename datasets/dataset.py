@@ -42,7 +42,7 @@ KEEP_AREA = 0.4
 
 class FSC147(Dataset):
     def __init__(self, config,
-                 split:str):
+                 split:str , subset_scale: float = 1.0):
         """
         Parameters
         ----------
@@ -56,7 +56,7 @@ class FSC147(Dataset):
         self.data_dir = config['training']['data_dir'] 
         self.dataset_type = config['training']['dataset_type'] # FSC147 
         additional_prompt = config['training'].get('additional_prompt', False)
-        subset_scale = config['training'].get('subset_scale', 1.0)
+        subset_scale = subset_scale
 
         self.resize_val = config['training']['resize_val'] if split == 'val' else False
 
@@ -117,24 +117,28 @@ class FSC147(Dataset):
                 x2 = bbox[2][0]
                 y2 = bbox[2][1]
                 rects.append([y1, x1, y2, x2])
-
+            
             dots = np.array(anno['points'])
 
-            image = Image.open('{}/{}'.format(self.im_dir, im_id))
+            img_path = '{}/{}'.format(self.im_dir, im_id)
+            image = Image.open(img_path)
             image.load()
             density_path = self.gt_dir + '/' + im_id.split(".jpg")[0] + ".npy"
             density = np.load(density_path).astype('float32')   
             m_flag = 0
 
             sample = {'image':image,'lines_boxes':rects,'gt_density':density, 'dots':dots, 'id':im_id, 'm_flag': m_flag}
-
             sample = self.transform(sample)
-            if self.use_additional_prompt:
-                return sample['image'].float(), sample['gt_density'], sample['boxes'], sample['m_flag'], text, additional_prompt 
-            return sample['image'].float(), sample['gt_density'], sample['boxes'], sample['m_flag'], text
+
+            
+            # img, den_map, prompt, prompt_attn_mask, img_attn_map, img_gd, img_src
+            img_src, img_gd = load_image(img_path) 
+
+            return sample['image'].float(), sample['gt_density'], text, im_id, img_gd, img_src
         elif self.split == "test" or self.split == "test_coco" or self.split == "val_coco" or (self.split == "val" and not self.resize_val):
             dots = np.array(anno['points'])
-            image = Image.open('{}/{}'.format(self.im_dir, im_id))
+            img_path = '{}/{}'.format(self.im_dir, im_id)
+            image = Image.open(img_path)
             text = self.class_dict[im_id]
             image.load()
             W, H = image.size
@@ -166,8 +170,6 @@ class FSC147(Dataset):
                 bbox = transforms.Resize((64, 64))(bbox)
                 boxes.append(bbox.numpy())
 
-            boxes = np.array(boxes)
-            boxes = torch.Tensor(boxes)
 
             # Only for visualisation purpose, no need for ground truth density map indeed.
             gt_map = np.zeros((image.shape[1], image.shape[2]),dtype='float32')
@@ -176,10 +178,24 @@ class FSC147(Dataset):
             gt_map = ndimage.gaussian_filter(gt_map, sigma=(1, 1), order=0)
             gt_map = torch.from_numpy(gt_map)
             gt_map = gt_map * 60
-            
-            sample = {'image':image,'dots':dots, 'boxes':boxes, 'pos':rects, 'gt_map':gt_map}
-            return sample['image'].float(), sample['gt_map'], sample['boxes'], sample['pos'], text
 
+            sample = {'image':image,'dots':dots, 'boxes':boxes, 'pos':rects, 'gt_map':gt_map, 'id':im_id}
+
+            img_src, img_gd = load_image(img_path) 
+
+            return sample['image'].float(), sample['gt_map'], text, im_id,  img_gd, img_src
+
+def collate_fn(batch):
+    img, den_map, prompt, id,  img_gd, img_src = zip(*batch)
+
+    return {
+        'image': torch.stack(img, 0),
+        'density': torch.stack(den_map, 0),
+        'img_id': id,
+        'img_gd': img_gd,
+        'img_src': img_src,
+        'text': prompt
+    }
 
 def random_crop(im_h, im_w, crop_h, crop_w):
     res_h = im_h - crop_h
@@ -677,16 +693,7 @@ Normalize = transforms.Compose([
         transforms.Normalize(mean=IM_NORM_MEAN, std=IM_NORM_STD)
         ])
 
-def collate_fn(batch):
-    image, density, boxes, m_flag, text = zip(*batch)
 
-    return {
-        'image': torch.stack(image, 0),
-        'density': torch.stack(density, 0),
-        'boxes': boxes,
-        'm_flag': torch.tensor(m_flag),
-        'text': text
-    }
 
 
 import logging
