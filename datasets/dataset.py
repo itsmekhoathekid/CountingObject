@@ -21,16 +21,16 @@ import pickle
 from imgaug.augmentables import Keypoint, KeypointsOnImage
 from transformers import CLIPTokenizer
 import torchvision.transforms.functional as F
-from .groundingDino import GetExampler
-from .GroundingDINO.groundingdino.datasets import transforms as T
+# from .groundingDino import GetExampler
+# from .GroundingDINO.groundingdino.datasets import transforms as T
 from typing import List, Tuple
 
-from .GroundingDINO.groundingdino.util.inference import (
-    load_model,
-    load_image,
-    predict,
-    annotate
-)
+# from .GroundingDINO.groundingdino.util.inference import (
+#     load_model,
+#     load_image,
+#     predict,
+#     annotate
+# )
 
 # import utils.debug_utils
 MAX_HW = 384
@@ -132,7 +132,8 @@ class FSC147(Dataset):
 
             
             # img, den_map, prompt, prompt_attn_mask, img_attn_map, img_gd, img_src
-            img_src, img_gd = load_image(img_path) 
+            # img_src, img_gd = load_image(img_path) 
+            img_src, img_gd = [], []
 
             return sample['image'].float(), sample['gt_density'], text, im_id, img_gd, img_src
         elif self.split == "test" or self.split == "test_coco" or self.split == "val_coco" or (self.split == "val" and not self.resize_val):
@@ -181,7 +182,7 @@ class FSC147(Dataset):
 
             sample = {'image':image,'dots':dots, 'boxes':boxes, 'pos':rects, 'gt_map':gt_map, 'id':im_id}
 
-            img_src, img_gd = load_image(img_path) 
+            img_src, img_gd = [], []
 
             return sample['image'].float(), sample['gt_map'], text, im_id,  img_gd, img_src
 

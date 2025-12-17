@@ -159,7 +159,7 @@ class Engine:
         self.current_epoch = 0
         self.contrast_pre_epoch = config['training'].get('contrast_pre_epoch', 20)
         self.min_mae = float('inf')
-        self.get_exampler = GetExampler(device=self.device)
+        # self.get_exampler = GetExampler(device=self.device)
 
     def reload(self):
         checkpoint_path = self.config['training'].get('save_path', 'checkpoint.pth')
@@ -176,14 +176,13 @@ class Engine:
         self.min_mae = checkpoint.get('min_mae', float('inf')) if checkpoint_path is not None else float('inf')
         self.batch_size = self.config['training'].get('batch_size', 4)
     
-    def save(self, epoch, score):
+    def save(self, epoch):
         checkpoint_path = self.config['training'].get('save_path', 'checkpoint.pth')
         torch.save({
             'epoch': epoch,
             'model_state_dict': self.model.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
             'schedular_state_dict': self.schedular.state_dict(),
-            'min_mae': score
         }, checkpoint_path)
 
         logging.info("Saved model checkpoint to {}".format(checkpoint_path))
@@ -223,7 +222,7 @@ class Engine:
             img_src = batch['img_src']
             text = batch['text']
 
-            examplers = self.get_exampler.get_highest_score_crop(img_gd, img_src, text, box_threshold=BOX_THRESHOLD, keep_area=KEEP_AREA, device=self.device).to(self.device)
+            # examplers = self.get_exampler.get_highest_score_crop(img_gd, img_src, text, box_threshold=BOX_THRESHOLD, keep_area=KEEP_AREA, device=self.device).to(self.device)
 
 
             self.optimizer.zero_grad()
@@ -232,7 +231,7 @@ class Engine:
                 imgs,
                 text,
                 coop_require_grad=self.config['training'].get('coop_training', False),
-                examplers=examplers
+                # examplers=examplers
             )
 
             mask = np.random.binomial(n=1, p=0.8, size=[384, 384])
@@ -324,7 +323,7 @@ class Engine:
             img_src = batch['img_src']
             text = batch['text']
 
-            examplers = self.get_exampler.get_highest_score_crop(img_gd, img_src, text, box_threshold=BOX_THRESHOLD, keep_area=KEEP_AREA, device=self.device).to(self.device)
+            # examplers = self.get_exampler.get_highest_score_crop(img_gd, img_src, text, box_threshold=BOX_THRESHOLD, keep_area=KEEP_AREA, device=self.device).to(self.device)
 
 
             self.optimizer.zero_grad()
@@ -333,7 +332,7 @@ class Engine:
                     imgs,
                     text,
                     coop_require_grad=self.config['training'].get('coop_training', False),
-                    examplers=examplers
+                    # examplers=examplers
                 )
 
             
@@ -456,7 +455,7 @@ class Engine:
         if reload_bool:
             self.reload()
 
-        
+        min_mae = float('inf')
         
         current_epoch = self.current_epoch
         for epoch in range(current_epoch, num_epochs):

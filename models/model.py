@@ -196,7 +196,7 @@ class LGCount(nn.Module):
         return pred_density
 
     def forward(self, imgs, class_text,
-                coop_require_grad: bool = False, examplers = None):
+                coop_require_grad: bool = False):
         extra_out = {}
         class_text = list(class_text)
         class_text_token = clip.tokenize(class_text).to(imgs.device)  # [B*12,77]
@@ -208,15 +208,15 @@ class LGCount(nn.Module):
                 class_text_embedding = self.text_encoder(class_text_token).float()
 
         cls_token, img_feat_patches = self.forward_visual_encoder(imgs, text_embedding=None)
-        cls_examplers_token, img_feat_patches_examplers = self.forward_visual_encoder(examplers, text_embedding=None)
+        # cls_examplers_token, img_feat_patches_examplers = self.forward_visual_encoder(examplers, text_embedding=None)
 
         patch_feat = img_feat_patches[:, 1:, :]
-        patch_examplers_feat = img_feat_patches_examplers[:, 1:, :]
+        # patch_examplers_feat = img_feat_patches_examplers[:, 1:, :]
         patch_embedding_contrast = self.patch_feat_proj_contrast(patch_feat)
-        patch_examplers_embedding_contrast = self.patch_feat_proj_exampler(patch_examplers_feat)
+        # patch_examplers_embedding_contrast = self.patch_feat_proj_exampler(patch_examplers_feat)
         
-        for block in self.img_blocks:
-            patch_embedding_contrast = block(patch_embedding_contrast, patch_examplers_embedding_contrast)
+        # for block in self.img_blocks:
+        #     patch_embedding_contrast = block(patch_embedding_contrast, patch_examplers_embedding_contrast)
 
 
         # pred_density = self.forward_decoder(img_feat_patches, top_fine_text_embedding) 
