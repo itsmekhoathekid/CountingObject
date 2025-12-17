@@ -1,4 +1,6 @@
 # CS331_AndvancedComputerVision
 
 
-& "C:\Program Files\Git\bin\bash.exe" download_dataset.sh
+https://arxiv.org/pdf/2407.04948
+
+https://github.com/HopooLinZ/VA-Count 

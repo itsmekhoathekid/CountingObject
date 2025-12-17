@@ -12,7 +12,7 @@ mkdir -p "${DATASET_DIR}"
 echo "[2/6] Install Python deps..."
 python -m pip install -U pip setuptools wheel ninja
 
-python -m pip install --index-url https://download.pytorch.org/whl/cu121 \
+python -m pip install --index-url https://download.pytorch.org/whl/cu118 \
   torch==2.3.1 torchvision==0.18.1 torchaudio==2.3.1
 
 python -m pip install \

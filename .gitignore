@@ -1,2 +1,4 @@
-Dataset/gt_density_map_adaptive_384_VarV2
-Dataset/images_384_VarV2
+Dataset
+*.pth
+logs
+

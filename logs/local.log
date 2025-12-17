@@ -1,0 +1,6 @@
+2025-12-13 12:44:50,154 - Epoch 1/10
+2025-12-13 12:48:58,356 - Train epoch done | epoch MAE: 1140.0578, epoch RMSE: 3256.4550
+2025-12-13 12:49:25,292 - Eval epoch done | epoch MAE: 48.6345, epoch RMSE: 129.1827
+2025-12-13 12:49:26,061 - Saved model checkpoint to checkpoint.pth
+2025-12-13 12:49:26,061 - New best model saved with MAE: 48.6345
+2025-12-13 12:49:26,061 - Epoch 2/10

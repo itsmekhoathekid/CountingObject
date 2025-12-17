@@ -32,7 +32,8 @@ class LGCount(nn.Module):
                  use_fim: bool = True,
                  use_mixed_fim: bool = False,
                  unfreeze_vit: bool = False,
-                 contrast_pre_epoch: int = 20):
+                 contrast_pre_epoch: int = 20,
+                 img_attent_block_depth: int = 2):
         """
         The LGCount model
         Param:
@@ -95,8 +96,10 @@ class LGCount(nn.Module):
 
         # --------------------------------------------------------------------------
         # Contrastive Learning related
-        self.patch_feat_proj = nn.Linear(self.clip_hidden_dim, self.clip_out_dim, bias=True)
-        self.patch_feat_proj_contrast = nn.Linear(self.clip_hidden_dim, self.clip_out_dim, bias=True)
+        self.patch_feat_proj = nn.Linear(512, self.clip_out_dim, bias=True)
+        self.patch_feat_proj_contrast = nn.Linear(self.clip_hidden_dim , self.clip_out_dim, bias=True)
+        self.patch_feat_proj_contrast_exampler = nn.Linear(512 ,self.clip_out_dim, bias=True)
+        self.patch_feat_proj_exampler = nn.Linear(self.clip_hidden_dim, self.clip_out_dim, bias=True)
         nn.init.xavier_normal_(self.patch_feat_proj.weight)
 
         n_token = self.n_patches
@@ -130,6 +133,11 @@ class LGCount(nn.Module):
                 CrossAttentionBlock(self.clip_out_dim, fim_num_heads, mlp_ratio, qkv_bias=True, qk_scale=None,
                                     norm_layer=norm_layer, drop=0.1, drop_path=0.1)
                 for _ in range(fim_depth)])
+        
+        self.img_blocks =  nn.ModuleList([
+                CrossAttentionBlock(self.clip_out_dim, fim_num_heads, mlp_ratio, qkv_bias=True, qk_scale=None,
+                                    norm_layer=norm_layer, drop=0.1, drop_path=0.1)
+                for _ in range(img_attent_block_depth)])
 
         self.decoder_norm = norm_layer(self.clip_out_dim)
 
@@ -148,17 +156,17 @@ class LGCount(nn.Module):
         _, cls_token, x = self.img_encoder(x, text_embedding)
         return cls_token, x
 
-    def forward_decoder(self, cls_token, img_feat_patches, gt_rank_text_embedding):
+    def forward_decoder(self, cls_token, img_feat_patches,  gt_rank_text_embedding):
         """
 
         """
 
         # add pos embed
 
-        patch_feat = img_feat_patches[:, 1:, :]
-        patch_embedding = self.patch_feat_proj(patch_feat)
+        # patch_feat = img_feat_patches[:, 1:, :]
+        patch_embedding = self.patch_feat_proj(img_feat_patches)
 
-        patch_embedding_contrast = self.patch_feat_proj_contrast(patch_feat)
+        # patch_embedding_contrast = self.patch_feat_proj_contrast_exampler(img_feat_patches)
 
         x = patch_embedding
         x = x + self.patch_emb_pos_embed  # [B, 196, 512]
@@ -188,7 +196,7 @@ class LGCount(nn.Module):
         return pred_density
 
     def forward(self, imgs, class_text,
-                coop_require_grad: bool = False):
+                coop_require_grad: bool = False, examplers = None):
         extra_out = {}
         class_text = list(class_text)
         class_text_token = clip.tokenize(class_text).to(imgs.device)  # [B*12,77]
@@ -200,14 +208,23 @@ class LGCount(nn.Module):
                 class_text_embedding = self.text_encoder(class_text_token).float()
 
         cls_token, img_feat_patches = self.forward_visual_encoder(imgs, text_embedding=None)
+        cls_examplers_token, img_feat_patches_examplers = self.forward_visual_encoder(examplers, text_embedding=None)
 
         patch_feat = img_feat_patches[:, 1:, :]
+        patch_examplers_feat = img_feat_patches_examplers[:, 1:, :]
         patch_embedding_contrast = self.patch_feat_proj_contrast(patch_feat)
+        patch_examplers_embedding_contrast = self.patch_feat_proj_exampler(patch_examplers_feat)
+        
+        for block in self.img_blocks:
+            patch_embedding_contrast = block(patch_embedding_contrast, patch_examplers_embedding_contrast)
+
+
         # pred_density = self.forward_decoder(img_feat_patches, top_fine_text_embedding) 
 
-        pred_density = self.forward_decoder(cls_token, img_feat_patches, class_text_embedding) # top_fine_text_embedding
+        pred_density = self.forward_decoder(cls_token, patch_embedding_contrast, class_text_embedding) # top_fine_text_embedding
         # pred_density = self.forward_decoder(img_feat_patches, torch.cat((class_text_embedding, top_fine_text_embedding),dim=1))
 
+        # print(class_text_embedding.shape)
         extra_out['class_text_embedding'] = class_text_embedding
         extra_out['patch_embedding_contrast'] = patch_embedding_contrast
 
@@ -275,116 +292,6 @@ class LGCount(nn.Module):
         return top_indices, sim_map, pred_density
 
 
-class LGCountAlign(nn.Module):
-    def __init__(self, fim_depth: int = 4,
-                 fim_num_heads: int = 8,
-                 mlp_ratio: float = 4.,
-                 norm_layer=nn.LayerNorm,
-                 use_vpt: bool = True,
-                 vpt_width: int = 2,
-                 vpt_depth: int = 2,
-                 use_coop: bool = True,
-                 coop_width: int = 2,
-                 backbone: str = "b16",
-                 use_fim: bool = True,
-                 use_mixed_fim: bool = False,
-                 unfreeze_vit: bool = False,
-                 contrast_pre_epoch: int = 20):
-        super().__init__()
-
-        # --------------------------------------------------------------------------
-        # MAE encoder specifics
-        if backbone == "b16":
-            self.clip, clip_preprocess = clip.load("ViT-B/16")
-            self.n_patches = 14 * 14
-            self.clip_hidden_dim = 768
-            self.clip_out_dim = 512
-        elif backbone == "b32":
-            self.clip, clip_preprocess = clip.load("ViT-B/32")
-            self.n_patches = 7 * 7
-            self.clip_hidden_dim = 768
-            self.clip_out_dim = 512
-
-        elif backbone == "l14":
-            self.clip, clip_preprocess = clip.load("ViT-L/14")
-            self.n_patches = 16 * 16
-            self.clip_hidden_dim = 1024
-            self.clip_out_dim = 768
-
-        self.clip = self.clip.to('cuda')
-        if unfreeze_vit:
-            # deal with some strange behavior of CLIP and pytorch-lightning.
-            self.clip = self.clip.float()
-        self.clip.requires_grad_(False)
-        self.preprocess = transforms.Compose([transforms.Resize((224, 224)),
-                                              transforms.Normalize(
-                                                  mean=(0.48145466, 0.4578275, 0.40821073),
-                                                  std=(0.26862954, 0.26130258, 0.27577711)
-                                              )
-                                              ])
-
-        self.use_vpt = use_vpt
-        self.use_coop = use_coop
-        self.vpt_width = vpt_width if use_vpt else 0
-        self.vpt_depth = vpt_depth if use_vpt else 0
-        self.coop_width = coop_width if use_coop else 0
-        self.img_encoder = CLIPViT(self.clip, self.clip_hidden_dim, use_vpt=self.use_vpt, vpt_width=self.vpt_width,
-                                   vpt_depth=self.vpt_depth, unfreeze=unfreeze_vit,
-                                   contrast_pre_epoch=contrast_pre_epoch)
-        self.text_encoder = CLIPTextTransformer(self.clip, use_coop=self.use_coop, n_ctx=self.coop_width,
-                                                contrast_pre_epoch=contrast_pre_epoch)
-        n_token = self.n_patches
-
-        # --------------------------------------------------------------------------
-        # The Hierarchical patch-text interaction module
-
-        self.use_fim = use_fim
-        self.use_mixed_fim = use_mixed_fim
-        # cannot use mixed_fim and fim at the same time
-        assert (not use_fim) or (
-            not use_mixed_fim), "You can not use hierachical transformer and plain transformer at the same time!"
-        self.fim_blocks = None
-
-        # --------------------------------------------------------------------------
-        # CNN-based density decoder
-        # self.density_decoder = DensityDecoder(self.clip_out_dim, 384, use_hiearachy = use_mixed_fim)
-        # --------------------------------------------------------------------------
-
-    def forward_visual_encoder(self, x, text_embedding):
-        """
-        input: x: images, [B, 3, 384, 384]
-        text_embedding: [B, 1, 512]
-        """
-        # embed patches
-        x = self.preprocess(x)
-        _, cls_token, x = self.img_encoder(x, text_embedding)
-        return cls_token, x
-
-    def forward(self, imgs, coarse_text_list, fine_text_list):
-        extra_out = {}
-        coarse_text_list = list(np.array(coarse_text_list).flatten('F'))  # [B*12]
-
-        with torch.no_grad():
-            cls_token, img_feat_patches = self.forward_visual_encoder(imgs, text_embedding=None)
-            coarse_text_token = clip.tokenize(coarse_text_list).to(imgs.device)
-            coarse_text_embedding = self.text_encoder(coarse_text_token).float()
-            coarse_text_embedding = coarse_text_embedding.reshape(imgs.shape[0], -1, coarse_text_embedding.shape[-1])
-            coarse_sim_map = F.cosine_similarity(cls_token, coarse_text_embedding, dim=-1)  # (B, 10)
-            _, pred_coarse_top_indices = torch.topk(coarse_sim_map, k=1, dim=1)
-
-            fine_list = []
-            for i in range(len(pred_coarse_top_indices)):
-                l = list(np.array(fine_text_list[pred_coarse_top_indices[i]]).flatten('F'))
-                fine_list.append(l[5 * i:5 * i + 5])
-            fine_list = list(np.array(fine_list).flatten())
-            fine_text_token = clip.tokenize(fine_list).to(imgs.device)
-            fine_text_embedding = self.text_encoder(fine_text_token).float()
-            fine_text_embedding = fine_text_embedding.reshape(imgs.shape[0], -1, fine_text_embedding.shape[-1])
-            fine_sim_map = F.cosine_similarity(cls_token, fine_text_embedding, dim=-1)  # (B, 10)
-            _, pred_fine_top_indices = torch.topk(fine_sim_map, k=1, dim=1)
-        top_fine_text_embedding = fine_text_embedding[
-            torch.arange(fine_text_embedding.size(0)).unsqueeze(1), pred_fine_top_indices]  # [B, 1, 512]
-        return pred_coarse_top_indices, pred_fine_top_indices, top_fine_text_embedding
 
 
 class CLIPViT(nn.Module):
