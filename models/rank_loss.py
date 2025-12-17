@@ -29,8 +29,6 @@ class RankLoss(nn.Module):
             positive_scores = sim_map[i][pos_mask[i]]
             negative_scores = sim_map[i][~pos_mask[i]]
 
-            if positive_scores.numel() == 0 or negative_scores.numel() == 0:
-                continue
 
             pos_neg_diff = positive_scores.unsqueeze(1) - negative_scores.unsqueeze(0)
             rank_loss = torch.clamp(2.0 - pos_neg_diff, min=0).mean()

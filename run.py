@@ -251,11 +251,7 @@ class Engine:
                 gt_density.detach().clone()
             )
 
-            if self.contrast_pre_epoch >= self.current_epoch:
-
-                loss = rank_loss
-            else:
-                loss = mse_loss + 0.01 * rank_loss
+            loss = mse_loss + 0.01 * rank_loss
             # if self.current_epoch <= self.contrast_pre_epoch:
             #     loss = rank_loss 
                 
