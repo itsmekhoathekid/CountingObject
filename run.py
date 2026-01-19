@@ -164,7 +164,8 @@ class Engine:
     def reload(self):
         checkpoint_path = self.config['training'].get('save_path', 'checkpoint.pth')
         if checkpoint_path is not None:
-            checkpoint = torch.load(checkpoint_path, map_location=self.device)
+            checkpoint = torch.load(checkpoint_path, map_location=self.device, weights_only=False)
+
             self.model.load_state_dict(checkpoint['model_state_dict'])
             self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             self.schedular.load_state_dict(checkpoint['schedular_state_dict'])
@@ -189,7 +190,7 @@ class Engine:
         logging.info("Saved model checkpoint to {}".format(checkpoint_path))
         
     def creates(self):
-        model = LGCount(
+        model = ObjectCounting(
             fim_depth=self.config['model'].get('fim_depth', 4),
             fim_num_heads=self.config['model'].get('fim_num_heads', 8),
             mlp_ratio=self.config['model'].get('mlp_ratio', 4.0)

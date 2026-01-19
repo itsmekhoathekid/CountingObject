@@ -9,19 +9,19 @@ DINO_DIR="${DINO_PARENT}/GroundingDINO"
 echo "[1/6] Create Dataset directory..."
 mkdir -p "${DATASET_DIR}"
 
-echo "[2/6] Install Python deps..."
-python -m pip install -U pip setuptools wheel ninja
+# echo "[2/6] Install Python deps..."
+# python -m pip install -U pip setuptools wheel ninja
 
-python -m pip install --index-url https://download.pytorch.org/whl/cu121 \
-  torch==2.3.1 torchvision==0.18.1 torchaudio==2.3.1
+# python -m pip install --index-url https://download.pytorch.org/whl/cu121 \
+#   torch==2.3.1 torchvision==0.18.1 torchaudio==2.3.1
 
-python -m pip install \
-  gdown opencv-python scipy imgaug "numpy<2" \
-  git+https://github.com/openai/CLIP.git \
-  einops "supervision>=0.22.0" transformers addict yapf pycocotools timm roboflow
+# python -m pip install \
+#   gdown opencv-python scipy imgaug "numpy<2" \
+#   git+https://github.com/openai/CLIP.git \
+#   einops "supervision>=0.22.0" transformers addict yapf pycocotools timm roboflow
 
 echo "[3/6] Export CUDA + runtime libs..."
-export CUDA_HOME=/usr/local/cuda
+export CUDA_HOME=/usr/local/cuda-12.8
 export PATH="$CUDA_HOME/bin:$PATH"
 export LD_LIBRARY_PATH="$CUDA_HOME/lib64:${LD_LIBRARY_PATH:-}"
 
@@ -58,26 +58,26 @@ EOF
 
 cd "${ROOT_DIR}"
 
-echo "[6/6] Download datasets..."
-gdown --id 1ymDYrGs9DSRicfZbSCDiOu0ikGDh5k6S -O "${DATASET_DIR}/myfile.zip"
+# echo "[6/6] Download datasets..."
+# gdown --id 1ymDYrGs9DSRicfZbSCDiOu0ikGDh5k6S -O "${DATASET_DIR}/myfile.zip"
 
-if command -v unzip &> /dev/null; then
-  unzip -o "${DATASET_DIR}/myfile.zip" -d "${DATASET_DIR}"
-  rm -f "${DATASET_DIR}/myfile.zip"
-else
-  echo "unzip not found, skipping extraction."
-fi
+# if command -v unzip &> /dev/null; then
+#   unzip -o "${DATASET_DIR}/myfile.zip" -d "${DATASET_DIR}"
+#   rm -f "${DATASET_DIR}/myfile.zip"
+# else
+#   echo "unzip not found, skipping extraction."
+# fi
 
-curl -L -o "${DATASET_DIR}/FSC-147-S.json" \
-  https://raw.githubusercontent.com/cha15yq/T2ICount/main/FSC-147-S.json
+# curl -L -o "${DATASET_DIR}/FSC-147-S.json" \
+#   https://raw.githubusercontent.com/cha15yq/T2ICount/main/FSC-147-S.json
 
-curl -L -o "${DATASET_DIR}/ImageClasses_FSC147.txt" \
-  https://raw.githubusercontent.com/cvlab-stonybrook/LearningToCountEverything/master/data/ImageClasses_FSC147.txt
+# curl -L -o "${DATASET_DIR}/ImageClasses_FSC147.txt" \
+#   https://raw.githubusercontent.com/cvlab-stonybrook/LearningToCountEverything/master/data/ImageClasses_FSC147.txt
 
-curl -L -o "${DATASET_DIR}/annotation_FSC147_384.json" \
-  https://raw.githubusercontent.com/cvlab-stonybrook/LearningToCountEverything/master/data/annotation_FSC147_384.json
+# curl -L -o "${DATASET_DIR}/annotation_FSC147_384.json" \
+#   https://raw.githubusercontent.com/cvlab-stonybrook/LearningToCountEverything/master/data/annotation_FSC147_384.json
 
-curl -L -o "${DATASET_DIR}/Train_Test_Val_FSC_147.json" \
-  https://raw.githubusercontent.com/cvlab-stonybrook/LearningToCountEverything/master/data/Train_Test_Val_FSC_147.json
+# curl -L -o "${DATASET_DIR}/Train_Test_Val_FSC_147.json" \
+#   https://raw.githubusercontent.com/cvlab-stonybrook/LearningToCountEverything/master/data/Train_Test_Val_FSC_147.json
 
-echo "Done."
+# echo "Done."

@@ -18,7 +18,7 @@ import functools
 import operator
 
 
-class LGCount(nn.Module):
+class ObjectCounting(nn.Module):
     def __init__(self, fim_depth: int = 4,
                  fim_num_heads: int = 8,
                  mlp_ratio: float = 4.,
@@ -214,7 +214,7 @@ class LGCount(nn.Module):
         patch_examplers_feat = img_feat_patches_examplers[:, 1:, :]
         patch_embedding_contrast = self.patch_feat_proj_contrast(patch_feat)
         patch_examplers_embedding_contrast = self.patch_feat_proj_exampler(patch_examplers_feat)
-        
+
         for block in self.img_blocks:
             patch_embedding_contrast = block(patch_embedding_contrast, patch_examplers_embedding_contrast)
 
@@ -535,5 +535,3 @@ class DensityDecoder(nn.Module):
         return x
 
 
-if __name__ == "__main__":
-    LG_count = LGCount()
