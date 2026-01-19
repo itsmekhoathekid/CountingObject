@@ -1,4 +1,6 @@
 Dataset
 *.pth
 logs
+.gitignore
+demo_fake.py
 
